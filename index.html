@@ -1,10 +1,10 @@
-<!DOCTYPE html>
+   <!DOCTYPE html>
 <html lang="id">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#06111f">
-<title>Taks Access</title>
+<title>Access all script</title>
 <style>
 /* ===== Desain dark cyan (mobile-first) ===== */
 :root{--cy:#00d9e8;--cy2:#00cfe8;--tx:#f1f7fb;--mu:#8aa0b5;--line:rgba(0,217,232,.22);color-scheme:dark}
@@ -85,7 +85,7 @@ svg.i{width:1em;height:1em;fill:none;stroke:currentColor;stroke-width:1.8;stroke
  <!-- Header utama: hanya muncul satu kali -->
  <header class="top">
   <span class="logo"><svg class="i"><use href="#lock"/></svg></span>
-  <div><h1>verify</h1><p>acces to script</p></div>
+  <div><h1>verify</h1><p>akses menuju script</p></div>
  </header>
  <main class="grid" id="grid"></main>
 </div>
@@ -143,11 +143,24 @@ function load() {
     const v = JSON.parse(localStorage.getItem(KEY));
     if (v && v.done && v.start && v.done.length === N && v.start.length === N) return v;
   } catch (e) { /* storage tidak tersedia: pakai memori */ }
-  return { done: Array(N).fill(false), start: Array(N).fill(null) };
+  return { done: Array(N).fill(false), start: Array(N).fill(null), left: false };
 }
 const S = load();
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+}
+
+/* ---------- Reset otomatis setelah Continue ----------
+   Saat Continue ditekan, S.left diset true dan disimpan SEBELUM pindah ke executor.
+   Ketika pengguna kembali, S.left yang masih true berarti "sudah pernah Continue",
+   maka seluruh progres dikosongkan. Penanda ini ada di localStorage sekaligus di memori
+   halaman, jadi reset bekerja untuk muat ulang biasa, tombol Back, dan halaman yang
+   dipulihkan dari Back/Forward Cache (pageshow). Progres yang belum Continue tidak disentuh. */
+function checkReturn() {
+  if (!S.left) return false;
+  S.done.fill(false); S.start.fill(null); S.left = false;
+  save();
+  return true;
 }
 
 /* ---------- Membangun kartu Taks (5 tugas dalam satu daftar) ---------- */
@@ -233,16 +246,18 @@ $("#grid").addEventListener("click", e => {
   const b = e.target.closest("button.cont");
   if (b && !b.disabled) {                    // tombol Continue
     if (!isUrl(CONFIG.destination)) return toast("URL tujuan Executor belum diisi. Edit bagian KONFIGURASI di index.html.");
+    S.left = true; save();                   // tandai: pengguna pergi ke executor (reset saat kembali)
     location.href = CONFIG.destination.trim();
   }
 });
 
-// Cek ulang saat kembali ke halaman / browser aktif lagi
-document.addEventListener("visibilitychange", tick);
+// Saat halaman kembali terlihat / dipulihkan: reset bila pengguna baru dari executor, lalu perbarui tampilan
+document.addEventListener("visibilitychange", () => { if (!document.hidden) checkReturn(); tick(); });
 window.addEventListener("focus", tick);
-window.addEventListener("pageshow", tick);
+window.addEventListener("pageshow", () => { checkReturn(); tick(); }); // termasuk pemulihan dari bfcache
 setInterval(tick, 250);
 
+checkReturn();   // muat ulang biasa / Back tanpa bfcache: progres lama dibersihkan sebelum tampil
 build();
 tick();
 </script>
